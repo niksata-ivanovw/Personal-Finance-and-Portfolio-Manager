@@ -1,0 +1,266 @@
+﻿@page
+@using test.Models
+@model IndexModel
+@{
+    ViewData["Title"] = "Моето Портфолио";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Финансов Тракер</h1>
+    <h3 class="text-success">Общо състояние: @Model.TotalNetWorth.ToString("C")</h3>
+</div>
+
+<hr />
+
+<div class="row">
+    <div class="col-md-4">
+        <h4>Добави нов актив</h4>
+        <form method="post" class="card p-3 bg-light">
+
+            <div class="mb-3">
+                <label>Вид актив:</label>
+                <select asp-for="InputType" class="form-control">
+                    <option value="Cash">Пари в брой (Депозит)</option>
+                    <option value="Crypto">Крипто</option>
+                    <option value="Stock">Акции</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label>Име на актива:</label>
+                <input asp-for="InputName" class="form-control" placeholder="напр. BTC, DSK Bank..." required />
+            </div>
+
+            <div class="mb-3">
+                <label>Количество / Сума:</label>
+                <input asp-for="InputValue" type="number" step="0.1" class="form-control" required />
+            </div>
+
+            <div class="mb-3">
+                <label>Текуща цена (Крипто / Акции):</label>
+                <div class="input-group">
+                    <span class="input-group-text">$</span>
+                    <input type="text" id="displayPrice" class="form-control bg-light" readonly />
+                    <input type="hidden" asp-for="InputPrice" step="0.1" id="hiddenPrice" />
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Запиши актив</button>
+        </form>
+    </div>
+
+    <div class="col-md-8">
+        <h4>Твоите Активи</h4>
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Име</th>
+                    <th>Количество</th>
+                    <th>Цена на покупка</th>
+                    <th>Текуща цена</th>
+                    <th>Печалба/Загуба</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var asset in Model.MyAssets)
+                {
+                    <tr data-symbol="@asset.Name.ToUpper()">
+                        <td>@asset.Name</td>
+                        <td class="asset-quantity">
+                            @if (asset is Crypto cryptoAsset)
+                            {
+                                @cryptoAsset.Quantity.ToString("F2")
+                            }
+                            else if (asset is Stock stockAsset)
+                            {
+                                @stockAsset.Quantity.ToString("F2")
+                            }
+                            else if (asset is Cash cashAsset)
+                            {
+                                @cashAsset.Amount.ToString("F2")
+                            }
+                            else
+                            {
+                                @("1")
+                            }
+                        </td>
+                        <td class="asset-buy-price">
+                            @if (asset is Crypto cryptoPrice)
+                            {
+                                @cryptoPrice.Price.ToString("F2")
+                            }
+                            else if (asset is Stock stockPrice)
+                            {
+                                @stockPrice.Price.ToString("F2")
+                            }
+                            else
+                            {
+                                @("1.00")
+                            }
+                        </td>
+                        <td class="current-price">Зареждане...</td>
+                        <td class="profit-loss">0.00 $</td>
+                        <td>
+                            <button type="button" class="btn btn-warning btn-sm"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#sellModal"
+                                    data-asset-name="@asset.Name"
+                                    data-asset-type="@(asset is Cash ? "Cash" : asset is Stock ? "Stock" : "Crypto")"
+                                    data-max-amount="@(asset is Crypto cryptoQty ? cryptoQty.Quantity : asset is Stock stockQty ? stockQty.Quantity : asset is Cash cashAmt ? cashAmt.Amount : 0)">
+                                Продай
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="modal fade" id="sellModal" tabindex="-1" aria-labelledby="sellModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="sellModalLabel">Продай актив</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="post" asp-page-handler="SellPartial">
+                    <div class="modal-body">
+                        <input type="hidden" name="assetName" id="modalAssetName" />
+
+                        <div class="mb-3">
+                            <label class="form-label">Актив: <strong id="modalAssetDisplay"></strong></label>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label" id="modalAmountLabel">Количество за продажба:</label>
+                            <input type="number"
+                                   name="sellAmount"
+                                   id="modalSellAmount"
+                                   class="form-control"
+                                   step="0.1"
+                                   min="0.1"
+                                   required />
+                            <small class="form-text text-muted">
+                                Налично: <span id="modalMaxAmount"></span>
+                            </small>
+                        </div>
+
+                        <div asp-validation-summary="All" class="text-danger"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отказ</button>
+                        <button type="submit" class="btn btn-warning">Продай</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+        document.getElementById('sellModal').addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const assetName = button.getAttribute('data-asset-name');
+        const assetType = button.getAttribute('data-asset-type');
+        const maxAmount = parseFloat(button.getAttribute('data-max-amount'));
+
+        document.getElementById('modalAssetName').value = assetName;
+        document.getElementById('modalAssetDisplay').textContent = assetName;
+        document.getElementById('modalMaxAmount').textContent = maxAmount.toFixed(2);
+        document.getElementById('modalSellAmount').max = maxAmount;
+        document.getElementById('modalSellAmount').value = maxAmount; // Default to selling all
+
+        // Update label based on asset type
+        if (assetType === 'Cash') {
+            document.getElementById('modalAmountLabel').textContent = 'Сума за теглене:';
+        } else {
+            document.getElementById('modalAmountLabel').textContent = 'Количество за продажба:';
+        }
+    });
+    document.getElementById('InputName').addEventListener('change', function() {
+        const symbol = this.value.toUpperCase();
+        const type = document.querySelector('select[name="InputType"]').value;
+
+        if (type === "Crypto" || type === "Stock") {
+            fetch(`/Markets?handler=StockPrice&symbol=${symbol}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.current === "0.00" || data.error) {
+                        document.getElementById('displayPrice').value = "";
+                        document.getElementById('hiddenPrice').value = "";
+                        alert(`Символът ${symbol} не е намерен!`);
+                        document.getElementById('InputName').value = "";
+                        return;
+                    }
+
+                    // Check if symbol matches the selected type
+                    const cryptoSymbols = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA"];
+                    const isCrypto = cryptoSymbols.includes(symbol);
+
+                    if (type === "Crypto" && !isCrypto) {
+                        alert(`${symbol} е акция, не криптовалута! Моля изберете "Акции" или въведете криптовалутен символ.`);
+                        document.getElementById('displayPrice').value = "";
+                        document.getElementById('hiddenPrice').value = "";
+                        document.getElementById('InputName').value = "";
+                        return;
+                    }
+
+                    if (type === "Stock" && isCrypto) {
+                        alert(`${symbol} е криптовалута, не акция! Моля изберете "Крипто" или въведете символ на акция.`);
+                        document.getElementById('displayPrice').value = "";
+                        document.getElementById('hiddenPrice').value = "";
+                        document.getElementById('InputName').value = "";
+                        return;
+                    }
+
+                    // If validation passes, set the price
+                    document.getElementById('displayPrice').value = data.current;
+                    document.getElementById('hiddenPrice').value = data.current;
+                })
+                .catch(err => {
+                    console.error("Грешка при взимане на цената:", err);
+                    alert("Грешка при свързване със сървъра!");
+                });
+        } else {
+            document.getElementById('displayPrice').value = "1.00";
+            document.getElementById('hiddenPrice').value = "1.00";
+        }
+    });
+
+    function updatePrices() {
+        document.querySelectorAll('tr[data-symbol]').forEach(row => {
+            const symbol = row.getAttribute('data-symbol');
+
+            fetch(`/Markets?handler=StockPrice&symbol=${symbol}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        row.querySelector('.current-price').innerText = "Няма данни";
+                        return;
+                    }
+
+                    // clean symbols and convert to nums
+                    const currentPrice = parseFloat(data.current.replace(/[^\d.-]/g, ''));
+                    const buyPrice = parseFloat(row.querySelector('.asset-buy-price').innerText.replace(/[^\d.-]/g, ''));
+                    const quantity = parseFloat(row.querySelector('.asset-quantity').innerText.replace(/[^\d.-]/g, '')) || 1;
+
+                    row.querySelector('.current-price').innerText = data.current + " $";
+
+                    // calculate p/l
+                    const pl = (currentPrice - buyPrice) * quantity;
+                    const plElement = row.querySelector('.profit-loss');
+
+                    // calculate %
+                    const percent = ((currentPrice - buyPrice) / buyPrice) * 100;
+                    plElement.innerText = `${pl.toFixed(2)} $ (${percent.toFixed(2)}%)`;
+
+                    plElement.className = pl >= 0 ? "profit-loss text-success fw-bold" : "profit-loss text-danger fw-bold";
+                })
+                .catch(err => console.error("Грешка:", err));
+        });
+    }
+
+    // Run price updates immediately and then every 5 seconds
+    updatePrices();
+    setInterval(updatePrices, 5000);
+</script>

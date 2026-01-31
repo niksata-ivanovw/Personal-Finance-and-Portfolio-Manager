@@ -1,0 +1,264 @@
+﻿@page
+@model test.Pages.MarketsModel
+@{
+    ViewData["Title"] = "Пазари в реално време";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Пазарен терминал</h1>
+    <hr />
+
+    <div class="input-group mb-4 w-50 mx-auto shadow-sm">
+        <input type="text" id="stock-search" class="form-control" placeholder="Търси символ (BTC, NVDA...)" />
+        <button class="btn btn-primary" onclick="searchStock()">Търси</button>
+    </div>
+    <div class="d-flex justify-content-center">
+        <p class="bg-danger badge fs-7" id="errorMessage"></p>
+    </div>
+
+    <div class="text-center mb-4">
+        <button class="btn btn-outline-primary btn-sm shadow-sm" type="button"
+                data-bs-toggle="collapse" data-bs-target="#extraStocks"
+                aria-expanded="false" aria-controls="extraStocks">
+            Виж още активи ↓
+        </button>
+    </div>
+
+    @{
+        var allStocks = Model.OnGetAvailableStocks().Value as List<string> ?? new List<string>();
+    }
+
+    <div class="row g-3 mb-2" id="stocks-row">
+        @foreach (var stock in allStocks.Take(4))
+        {
+            <div class="col-6 col-md-3">
+                <div class="card h-100 shadow-sm border-0 stock-card" onclick="selectStock('@stock')" style="cursor: pointer;">
+                    <div class="card-body">
+                        <span class="badge position-absolute top-0 end-0 m-2 @(Model.IsCrypto(stock) ? "bg-warning text-dark" : "bg-info text-dark")" style="font-size: 0.6rem;">
+                            @(Model.IsCrypto(stock) ? "CRYPTO" : "STOCK")
+                        </span>
+                        <small class="text-uppercase text-muted fw-bold">@stock</small>
+                        <h4 class="fw-bold mb-0 mt-1 text-nowrap" id="card-price-@stock">---</h4>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    
+
+    <div class="collapse" id="extraStocks">
+        <div class="row g-3 mb-5">
+            @foreach (var stock in allStocks.Skip(4))
+            {
+                <div class="col-6 col-md-3">
+                    <div class="card h-100 shadow-sm border-0 stock-card" onclick="selectStock('@stock')" style="cursor: pointer;">
+                        <div class="card-body">
+                            <span class="badge position-absolute top-0 end-0 m-2 @(Model.IsCrypto(stock) ? "bg-warning text-dark" : "bg-info text-dark")" style="font-size: 0.6rem;">
+                                @(Model.IsCrypto(stock) ? "CRYPTO" : "STOCK")
+                            </span>
+                            <small class="text-uppercase text-muted fw-bold">@stock</small>
+                            <h4 class="fw-bold mb-0 mt-1 text-nowrap" id="card-price-@stock">---</h4>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card shadow-lg p-4 border-0 rounded-4">
+        <div class="d-flex  align-items-center justify-content-between mb-4">
+            <div class="align-items-center d-flex">
+                <h3 id="current-title" class="text-secondary fw-bold mb-0">SPY</h3>
+                <span id="graphContainerType" style="font-size: 0.8rem">
+                    </span>
+            </div>
+            <button onclick="resetChartZoom()" class="btn btn-sm btn-outline-primary">
+            Върни изгледа (Reset)
+            </button>
+        </div>
+
+        <h2 id="price-container" class="display-2 text-primary fw-bold mb-3">$0.00</h2>
+        <div class="text-center mb-4">
+            <span id="percent-change" class="badge fs-4 text-bg-success">0.00%</span>
+        </div>
+
+        <div style="height: 400px; width: 100%;">
+            <canvas id="priceChart"></canvas>
+        </div>
+        <div class="d-flex gap-4 justify-content-center align-items-center p-3">
+            <div>
+                <span class="text-muted small">Min:</span>
+                <span class="fw-bold text-info ms-1" id="minPrice">$581.50</span>
+            </div>
+            <div class="vr"></div>
+            <div>
+                <span class="text-muted small">Max:</span>
+                <span class="fw-bold text-danger ms-1" id="maxPrice">$591.72</span>
+            </div>
+            <div class="vr"></div>
+            <div>
+                <span class="text-muted small">Avg:</span>
+                <span class="fw-bold text-secondary ms-1" id="avgPrice">$587.56</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+
+    <script>
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        let initialStocks = [];
+        let currentSymbol = "SPY"; //default value
+
+        const myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], // filled from c#
+                datasets: [{
+                    label: 'Цена (USD)',
+                    data: [], // ----||----
+                    borderColor: '#0d6efd',
+                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    zoom: {
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                        },
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            mode: 'x', 
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return 'Цена: $' + context.parsed.y.toFixed(2);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        ticks: {
+                            callback: function(value) { return '$' + value.toFixed(2); }
+                        }
+                    }
+                }
+            }
+        });        
+
+        function loadAvailableStocks() {
+            fetch(`?handler=AvailableStocks`)
+            .then(result => result.json())
+            .then(stocks => {
+                initialStocks = stocks;
+                refreshAllPrices();
+            })
+        }
+
+        function selectStock(symbol) {
+            currentSymbol = symbol
+            document.getElementById('current-title').innerText = symbol;
+
+            // reset graph
+            myChart.data.labels = [];
+            myChart.data.datasets[0].data = [];
+            myChart.update();
+
+            updateMiniCard(symbol, false);
+        }
+
+        function searchStock() {
+            const input = document.getElementById('stock-search');
+            const symbol = input.value.trim().toUpperCase();
+            const errorContainer = document.getElementById('errorMessage')
+            if (symbol) {
+                if (initialStocks.includes(symbol)){
+                    selectStock(symbol);
+                    input.value = "";
+                    errorContainer.innerText = ""
+                }
+                else{
+                    errorContainer.innerText = "Невалидно име!"
+                }
+            }
+        }
+
+        function updateMiniCard(symbol, isRefresh = true) {
+            fetch(`?handler=StockPrice&symbol=${symbol}&isRefresh=${isRefresh}`)
+                .then(response => response.json())
+                .then(data => {
+                    const miniCard = document.getElementById(`card-price-${symbol}`);
+                    if (miniCard) miniCard.innerText = "$" + data.current;
+
+                    if (symbol == currentSymbol)
+                    {
+                        updateMainDisplay(data, currentSymbol);
+                    }
+                });
+        }
+
+        function updateMainDisplay(data, symbol) {
+            const cryptoSymbols = ["BTC", "ETH", "BNB", "SOL", "XRP", "DOGE", "ADA"];
+            const container = document.getElementById('price-container');
+            const container2 = document.getElementById('graphContainerType')
+            
+            container.innerText = "$" + data.current;
+
+            //stock span logic
+            if (cryptoSymbols.includes(symbol))
+            { 
+                container2.className = container2.className + "badge ms-4 bg-warning text-dark";
+                container2.innerText = "CRYPTO"
+            }
+            else{
+                container2.innerText = "STOCK";
+                container2.className = "badge ms-4 bg-info text-dark";
+            }
+
+            //percentChange logic
+            const badge = document.getElementById('percent-change')
+            const pChange = parseFloat(data.change)
+            badge.innerText = (pChange >= 0 ? "+" : "") + data.change + "%";
+            badge.className = "badge " + (pChange >= 0 ? "bg-success" : "bg-danger");
+
+            //scroll and graphic update
+             myChart.data.labels = data.labels;
+             myChart.data.datasets[0].data = data.history;
+
+             myChart.update('none');
+
+			 document.getElementById('minPrice').innerText = "$" + data.minPrice;
+             document.getElementById('maxPrice').innerText = "$" + data.maxPrice;
+             document.getElementById('avgPrice').innerText = "$" + data.avgPrice;
+        }
+
+        function refreshAllPrices(){
+            initialStocks.forEach(symbol => {updateMiniCard(symbol, true)});
+        }
+
+        function resetChartZoom() {
+            myChart.resetZoom();
+        }
+
+        setInterval(refreshAllPrices, 5000); // per 5 sec
+        loadAvailableStocks();
+    </script>
+}

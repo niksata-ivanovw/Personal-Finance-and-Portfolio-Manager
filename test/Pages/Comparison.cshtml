@@ -1,0 +1,213 @@
+﻿@page
+@model test.Pages.ComparisonModel
+@{
+    ViewData["Title"] = "Сравнение на активи";
+}
+
+<div class="container mt-4">
+    <h1 class="mb-4">Сравнение на активи</h1>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Изберете активи за сравнение</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        <div class="mb-3">
+                            <label class="form-label">Първи актив:</label>
+                            <select asp-for="Symbol1" class="form-select" required>
+                                <option value="">-- Изберете --</option>
+                                @foreach (var symbol in Model.AvailableSymbols)
+                                {
+                                    <option value="@symbol">@symbol</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Втори актив:</label>
+                            <select asp-for="Symbol2" class="form-select" required>
+                                <option value="">-- Изберете --</option>
+                                @foreach (var symbol in Model.AvailableSymbols)
+                                {
+                                    <option value="@symbol">@symbol</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Тип графика:</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" asp-for="ChartType" value="absolute" id="absolute" checked>
+                                <label class="form-check-label" for="absolute">
+                                    Абсолютни цени ($)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" asp-for="ChartType" value="percent" id="percent">
+                                <label class="form-check-label" for="percent">
+                                    Процентна промяна (%)
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-success w-100">Сравни</button>
+                    </form>
+
+                    <div asp-validation-summary="All" class="text-danger mt-3"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            @if (Model.ComparisonResult != null)
+            {
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">Статистика</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-6">
+                                <div class="border rounded p-3">
+                                    <h4 class="fw-bold text-primary">@Model.ComparisonResult.Symbol1</h4>
+                                    <div class="fs-3">$@Model.ComparisonResult.Symbol1Current.ToString("N2")</div>
+                                    <div class="@(Model.ComparisonResult.Symbol1Change >= 0 ? "text-success" : "text-danger") fw-bold">
+                                        @(Model.ComparisonResult.Symbol1Change >= 0 ? "▲" : "▼") @Math.Abs(Model.ComparisonResult.Symbol1Change).ToString("F2")%
+                                    </div>
+                                    <small class="text-muted">Начална цена: $@Model.ComparisonResult.Symbol1Initial.ToString("N2")</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="border rounded p-3">
+                                    <h4 class="fw-bold text-danger">@Model.ComparisonResult.Symbol2</h4>
+                                    <div class="fs-3">$@Model.ComparisonResult.Symbol2Current.ToString("N2")</div>
+                                    <div class="@(Model.ComparisonResult.Symbol2Change >= 0 ? "text-success" : "text-danger") fw-bold">
+                                        @(Model.ComparisonResult.Symbol2Change >= 0 ? "▲" : "▼") @Math.Abs(Model.ComparisonResult.Symbol2Change).ToString("F2")%
+                                    </div>
+                                    <small class="text-muted">Начална цена: $@Model.ComparisonResult.Symbol2Initial.ToString("N2")</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Графика - @(Model.ComparisonResult.ChartType == "percent" ? "Процентна промяна" : "Абсолютни цени")</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-body text-center text-muted">
+                        <i class="bi bi-graph-up" style="font-size: 4rem;"></i>
+                        <p class="mt-3">Изберете два актива за сравнение</p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (Model.ComparisonResult != null)
+{
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const ctx = document.getElementById('comparisonChart').getContext('2d');
+        let chart = null;
+
+        const symbol1 = '@Model.ComparisonResult.Symbol1';
+        const symbol2 = '@Model.ComparisonResult.Symbol2';
+        const chartType = '@Model.ComparisonResult.ChartType';
+
+        function createChart(comparisonData) {
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: comparisonData.labels,
+                    datasets: [
+                        {
+                            label: comparisonData.symbol1,
+                            data: comparisonData.symbol1Data,
+                            borderColor: '#0d6efd',
+                            backgroundColor: '#0d6efd20',
+                            borderWidth: 3,
+                            tension: 0.4
+                        },
+                        {
+                            label: comparisonData.symbol2,
+                            data: comparisonData.symbol2Data,
+                            borderColor: '#dc3545',
+                            backgroundColor: '#dc354520',
+                            borderWidth: 3,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (chartType === 'percent') {
+                                        label += context.parsed.y.toFixed(2) + '%';
+                                    } else {
+                                        label += '$' + context.parsed.y.toFixed(2);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: chartType === 'percent',
+                            ticks: {
+                                callback: function(value) {
+                                    return chartType === 'percent' ? value.toFixed(1) + '%' : '$' + value.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initial chart render
+        createChart(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ComparisonResult)));
+
+        // Auto-update chart every 5 seconds
+        setInterval(function() {
+            fetch(`/Comparison?handler=RefreshComparison&symbol1=${symbol1}&symbol2=${symbol2}&chartType=${chartType}`)
+                .then(res => res.json())
+                .then(data => {
+                    createChart(data);
+                })
+                .catch(err => console.error('Chart update error:', err));
+        }, 5000);
+    </script>
+}
