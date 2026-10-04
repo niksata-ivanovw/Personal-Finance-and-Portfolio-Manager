@@ -1,0 +1,13 @@
+# Visual Studio & Build Output
+**/[Bb]in/
+**/[Oo]bj/
+**/.vs/
+**/packages/
+
+# Settings and binaries
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.dll
+*.exe
