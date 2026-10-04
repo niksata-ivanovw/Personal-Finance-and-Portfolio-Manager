@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "ld7+jI6O2+U=",
+  "dgSpecHash": "P1BzwGozPs0=",
   "success": true,
-  "projectFilePath": "C:\\Users\\nikol\\source\\repos\\test\\test\\test.csproj",
+  "projectFilePath": "C:\\Users\\nikol\\Desktop\\Personal-Finance-and-Portfolio-Manager\\PersonalFinanceManager\\PersonalFinanceManager.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\nikol\\.nuget\\packages\\csvhelper\\30.0.1\\csvhelper.30.0.1.nupkg.sha512",
     "C:\\Users\\nikol\\.nuget\\packages\\flurl\\3.0.7\\flurl.3.0.7.nupkg.sha512",
